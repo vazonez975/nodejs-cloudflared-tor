@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebCMD — Files</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #00ff88;
+    --green-dim: #00cc6a;
+    --green-glow: rgba(0,255,136,0.15);
+    --red: #ff4466;
+    --yellow: #ffcc00;
+    --blue: #44aaff;
+    --bg: #0a0c0a;
+    --bg2: #0f130f;
+    --border: rgba(0,255,136,0.18);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+    pointer-events: none; z-index: 100;
+  }
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.5) 100%);
+    pointer-events: none; z-index: 99;
+  }
+
+  #app { display: flex; flex-direction: column; height: 100vh; padding: 0 16px; max-width: 1200px; margin: 0 auto; }
+
+  /* Header */
+  #header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0 8px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  #logo { font-size: 18px; font-weight: 600; letter-spacing: 0.08em; text-shadow: 0 0 12px var(--green); }
+  #logo span { color: #fff; opacity: 0.45; }
+  #nav-links { display: flex; gap: 14px; }
+  .nav-link {
+    color: var(--green-dim); text-decoration: none; font-size: 12px;
+    letter-spacing: 0.06em; border-bottom: 1px solid transparent;
+    transition: all 0.15s; padding-bottom: 1px;
+  }
+  .nav-link:hover, .nav-link.active { color: var(--green); border-color: var(--green); }
+
+  /* Breadcrumb */
+  #breadcrumb {
+    display: flex; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    flex-shrink: 0; flex-wrap: wrap; gap: 2px;
+  }
+  .crumb {
+    color: var(--green-dim); cursor: pointer; font-size: 12px;
+    padding: 2px 4px; border-radius: 2px; transition: all 0.1s;
+  }
+  .crumb:hover { color: var(--green); background: var(--green-glow); }
+  .crumb-sep { color: var(--border); margin: 0 1px; }
+
+  /* Toolbar */
+  #toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .tbtn {
+    background: none; border: 1px solid var(--border); color: var(--green-dim);
+    font-family: inherit; font-size: 11px; padding: 4px 12px; cursor: pointer;
+    letter-spacing: 0.05em; transition: all 0.15s; border-radius: 2px;
+  }
+  .tbtn:hover { border-color: var(--green); color: var(--green); background: var(--green-glow); }
+  .tbtn.danger:hover { border-color: var(--red); color: var(--red); background: rgba(255,68,102,0.1); }
+  .tbtn:disabled { opacity: 0.3; cursor: default; }
+  #path-input {
+    flex: 1; background: var(--bg2); border: 1px solid var(--border);
+    color: var(--green); font-family: inherit; font-size: 12px;
+    padding: 4px 10px; outline: none; border-radius: 2px;
+    min-width: 150px;
+  }
+  #path-input:focus { border-color: var(--green-dim); }
+
+  /* Upload drop zone */
+  #drop-zone {
+    border: 1px dashed var(--border); padding: 4px 14px;
+    font-size: 11px; color: var(--green-dim); cursor: pointer;
+    border-radius: 2px; transition: all 0.15s; white-space: nowrap;
+    display: inline-block;
+  }
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--green); color: var(--green); background: var(--green-glow);
+  }
+  #file-input { display: none; }
+
+  /* File list */
+  #file-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+  #file-list::-webkit-scrollbar { width: 4px; }
+  #file-list::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .file-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 5px 8px; border-radius: 2px; cursor: pointer;
+    border: 1px solid transparent; transition: all 0.1s;
+    user-select: none;
+  }
+  .file-item:hover { background: var(--green-glow); border-color: var(--border); }
+  .file-item.selected { background: rgba(0,255,136,0.1); border-color: var(--green-dim); }
+
+  .file-icon { width: 18px; text-align: center; flex-shrink: 0; font-size: 14px; }
+  .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-name.dir { color: var(--blue); }
+  .file-size { color: var(--green-dim); font-size: 11px; min-width: 70px; text-align: right; }
+  .file-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.1s; }
+  .file-item:hover .file-actions { opacity: 1; }
+  .fa-btn {
+    background: none; border: none; color: var(--green-dim);
+    cursor: pointer; font-size: 12px; padding: 1px 5px;
+    font-family: inherit; transition: color 0.1s;
+  }
+  .fa-btn:hover { color: var(--green); }
+  .fa-btn.del:hover { color: var(--red); }
+
+  /* Status bar */
+  #statusbar {
+    border-top: 1px solid var(--border); padding: 5px 0;
+    font-size: 11px; color: var(--green-dim); flex-shrink: 0;
+    display: flex; justify-content: space-between;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200;
+  }
+  .modal {
+    background: var(--bg2); border: 1px solid var(--green-dim);
+    padding: 20px 24px; min-width: 300px; box-shadow: 0 0 30px rgba(0,255,136,0.1);
+  }
+  .modal h3 { font-size: 13px; margin-bottom: 12px; color: var(--green); letter-spacing: 0.05em; }
+  .modal input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    color: var(--green); font-family: inherit; font-size: 13px;
+    padding: 6px 10px; outline: none; margin-bottom: 14px;
+  }
+  .modal input:focus { border-color: var(--green-dim); }
+  .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+  .loading { color: var(--green-dim); padding: 20px 8px; font-size: 12px; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .empty { color: var(--green-dim); padding: 20px 8px; font-size: 12px; opacity: 0.5; }
+  .err-msg { color: var(--red); padding: 10px 8px; font-size: 12px; }
+
+  /* Upload progress */
+  #upload-bar {
+    display: none; height: 2px; background: var(--border);
+    margin: 4px 0; border-radius: 1px; overflow: hidden;
+  }
+  #upload-bar.visible { display: block; }
+  #upload-fill { height: 100%; background: var(--green); width: 0; transition: width 0.2s; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div id="logo">WEB<span>/</span>CMD</div>
+    <div id="nav-links">
+      <a href="/" class="nav-link">🏠 HOME</a>
+      <a href="/terminal" class="nav-link">TERMINAL</a>
+      <a href="/files" class="nav-link active">FILES</a>
+    </div>
+  </div>
+
+  <div id="breadcrumb"></div>
+
+  <div id="toolbar">
+    <input id="path-input" type="text" placeholder="Путь..." />
+    <button class="tbtn" onclick="goToPath()">GO</button>
+    <button class="tbtn" onclick="refresh()">↻ REFRESH</button>
+    <label id="drop-zone">
+      ⬆ UPLOAD
+      <input id="file-input" type="file" multiple onchange="uploadFiles(this.files)" />
+    </label>
+    <button class="tbtn danger" id="del-btn" disabled onclick="deleteSelected()">✕ DELETE</button>
+    <button class="tbtn" id="ren-btn" disabled onclick="renameSelected()">✎ RENAME</button>
+  </div>
+
+  <div id="upload-bar"><div id="upload-fill"></div></div>
+
+  <div id="file-list"><div class="loading">Loading...</div></div>
+
+  <div id="statusbar">
+    <span id="status-left">—</span>
+    <span id="status-right">—</span>
+  </div>
+</div>
+
+<!-- Rename modal -->
+<div class="modal-overlay" id="modal" style="display:none">
+  <div class="modal">
+    <h3>RENAME</h3>
+    <input id="modal-input" type="text" />
+    <div class="modal-btns">
+      <button class="tbtn" onclick="closeModal()">CANCEL</button>
+      <button class="tbtn" onclick="confirmRename()">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drop overlay -->
+<div id="drag-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,255,136,0.07);border:2px dashed var(--green);z-index:150;pointer-events:none;align-items:center;justify-content:center;font-size:20px;color:var(--green);">DROP TO UPLOAD</div>
+
+<script>
+  let currentPath = '';
+  let selectedItem = null;
+  let renameTarget = null;
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  async function init() {
+    const res = await fetch('/api/ls');
+    const data = await res.json();
+    currentPath = data.path;
+    renderList(data);
+  }
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+
+  async function navigate(dir) {
+    selectedItem = null;
+    updateButtons();
+    document.getElementById('file-list').innerHTML = '<div class="loading">Loading...</div>';
+    try {
+      const res = await fetch('/api/ls?path=' + encodeURIComponent(dir));
+      const data = await res.json();
+      if (data.error) { showError(data.error); return; }
+      currentPath = data.path;
+      renderList(data);
+    } catch(e) { showError(e.message); }
+  }
+
+  async function refresh() { await navigate(currentPath); }
+
+  function goToPath() {
+    const p = document.getElementById('path-input').value.trim();
+    if (p) navigate(p);
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  function renderList(data) {
+    document.getElementById('path-input').value = data.path;
+    renderBreadcrumb(data.path);
+
+    const list = document.getElementById('file-list');
+    list.innerHTML = '';
+
+    const items = data.items;
+    if (!items || items.length === 0) {
+      list.innerHTML = '<div class="empty">Empty folder</div>';
+      updateStatus(0, 0);
+      return;
+    }
+
+    // Sort: dirs first, then files
+    items.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    // Up button
+    const parentDir = getParentPath(data.path);
+    if (parentDir !== null) {
+      const up = document.createElement('div');
+      up.className = 'file-item';
+      up.innerHTML = `
+        <div class="file-icon">📁</div>
+        <div class="file-name dir">..</div>
+        <div class="file-size"></div>
+      `;
+      up.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigate(parentDir);
+      });
+      list.appendChild(up);
+    }
+
+    let totalSize = 0;
+    let fileCount = 0;
+    items.forEach(item => {
+      if (item.size) totalSize += item.size;
+      if (!item.isDir) fileCount++;
+      const fullPath = data.path.endsWith('\\') || data.path.endsWith('/')
+        ? data.path + item.name
+        : data.path + (data.path.includes('\\') ? '\\' : '/') + item.name;
+      
+      const el = makeItem(item, fullPath);
+      list.appendChild(el);
+    });
+
+    updateStatus(fileCount, totalSize);
+  }
+
+  function makeItem(item, fullPath) {
+    const el = document.createElement('div');
+    el.className = 'file-item';
+    el.dataset.path = fullPath;
+    el.dataset.name = item.name;
+    el.dataset.isDir = item.isDir;
+
+    const icon = item.isDir ? '📁' : getIcon(item.name);
+    const sizeStr = item.size != null ? formatSize(item.size) : '';
+
+    el.innerHTML = `
+      <div class="file-icon">${icon}</div>
+      <div class="file-name ${item.isDir ? 'dir' : ''}">${escapeHtml(item.name)}</div>
+      <div class="file-size">${sizeStr}</div>
+      <div class="file-actions">
+        ${!item.isDir ? `<button class="fa-btn" title="Download" onclick="downloadFile(event,'${escapePath(fullPath)}')">⬇</button>` : ''}
+        <button class="fa-btn" title="Rename" onclick="renameItem(event,'${escapePath(fullPath)}','${escapeHtml(item.name)}')">✎</button>
+        <button class="fa-btn del" title="Delete" onclick="deleteItem(event,'${escapePath(fullPath)}')">✕</button>
+      </div>
+    `;
+
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('fa-btn')) return;
+      if (item.isDir) {
+        navigate(fullPath);
+      } else {
+        selectItem(el, fullPath);
+      }
+    });
+
+    return el;
+  }
+
+  function getParentPath(p) {
+    const isWin = p.includes('\\');
+    const sep = isWin ? '\\' : '/';
+    
+    let normalized = p;
+    if (normalized.endsWith(sep)) {
+      normalized = normalized.slice(0, -1);
+    }
+    
+    if (isWin) {
+      if (normalized.match(/^[A-Za-z]:\\?$/i)) {
+        return null;
+      }
+    } else {
+      if (normalized === '/') {
+        return null;
+      }
+    }
+    
+    const parts = normalized.split(sep).filter(Boolean);
+    if (parts.length === 0) return null;
+    parts.pop();
+    
+    if (parts.length === 0) {
+      return isWin ? 'C:\\' : '/';
+    }
+    
+    return isWin ? parts.join('\\') + '\\' : '/' + parts.join('/');
+  }
+
+  function selectItem(el, filePath) {
+    document.querySelectorAll('.file-item.selected').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedItem = filePath;
+    updateButtons();
+  }
+
+  function updateButtons() {
+    document.getElementById('del-btn').disabled = !selectedItem;
+    document.getElementById('ren-btn').disabled = !selectedItem;
+  }
+
+  // ── Breadcrumb ────────────────────────────────────────────────────────────
+
+  function renderBreadcrumb(p) {
+    const bc = document.getElementById('breadcrumb');
+    bc.innerHTML = '';
+    const isWin = p.includes('\\');
+    const parts = isWin ? p.split('\\') : p.split('/');
+    let accumulated = '';
+    parts.forEach((part, i) => {
+      if (!part && i === 0) { accumulated = '/'; }
+      else { accumulated = isWin ? (accumulated ? accumulated + '\\' + part : part + '\\') : accumulated + '/' + part; }
+      if (!part) return;
+      const crumb = document.createElement('span');
+      crumb.className = 'crumb';
+      crumb.textContent = part + (isWin && i === 0 ? '\\' : '');
+      const target = accumulated;
+      crumb.onclick = () => navigate(target);
+      bc.appendChild(crumb);
+      if (i < parts.length - 1 && parts[i+1]) {
+        const sep = document.createElement('span');
+        sep.className = 'crumb-sep';
+        sep.textContent = isWin ? '\\' : '/';
+        bc.appendChild(sep);
+      }
+    });
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  function downloadFile(e, filePath) {
+    e.stopPropagation();
+    window.location.href = '/api/download?path=' + encodeURIComponent(filePath);
+  }
+
+  function deleteItem(e, filePath) {
+    e.stopPropagation();
+    if (!confirm('Удалить: ' + filePath + '?')) return;
+    doDelete(filePath);
+  }
+
+  async function deleteSelected() {
+    if (!selectedItem) return;
+    if (!confirm('Удалить: ' + selectedItem + '?')) return;
+    await doDelete(selectedItem);
+    selectedItem = null;
+    updateButtons();
+  }
+
+  async function doDelete(filePath) {
+    const res = await fetch('/api/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath })
+    });
+    const data = await res.json();
+    if (data.ok) refresh();
+    else alert('Ошибка: ' + data.error);
+  }
+
+  function renameItem(e, filePath, name) {
+    e.stopPropagation();
+    openRenameModal(filePath, name);
+  }
+
+  function renameSelected() {
+    if (!selectedItem) return;
+    const name = selectedItem.split('\\').pop().split('/').pop();
+    openRenameModal(selectedItem, name);
+  }
+
+  function openRenameModal(filePath, name) {
+    renameTarget = filePath;
+    const inp = document.getElementById('modal-input');
+    inp.value = name;
+    document.getElementById('modal').style.display = 'flex';
+    setTimeout(() => inp.focus(), 50);
+  }
+
+  function closeModal() {
+    document.getElementById('modal').style.display = 'none';
+    renameTarget = null;
+  }
+
+  async function confirmRename() {
+    const newName = document.getElementById('modal-input').value.trim();
+    if (!newName || !renameTarget) return;
+    closeModal();
+    const res = await fetch('/api/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPath: renameTarget, newName })
+    });
+    const data = await res.json();
+    if (data.ok) refresh();
+    else alert('Ошибка: ' + data.error);
+  }
+
+  async function uploadFiles(files) {
+    if (!files.length) return;
+    const bar = document.getElementById('upload-bar');
+    const fill = document.getElementById('upload-fill');
+    bar.classList.add('visible');
+    fill.style.width = '0%';
+
+    for (let i = 0; i < files.length; i++) {
+      const fd = new FormData();
+      fd.append('file', files[i], files[i].name);
+      await fetch('/api/upload?path=' + encodeURIComponent(currentPath), { method: 'POST', body: fd });
+      fill.style.width = ((i + 1) / files.length * 100) + '%';
+    }
+
+    setTimeout(() => { bar.classList.remove('visible'); fill.style.width = '0%'; }, 600);
+    document.getElementById('file-input').value = '';
+    refresh();
+  }
+
+  // ── Drag & Drop ───────────────────────────────────────────────────────────
+
+  let dragCounter = 0;
+  const overlay = document.getElementById('drag-overlay');
+  document.addEventListener('dragenter', e => { 
+    e.preventDefault(); 
+    dragCounter++; 
+    overlay.style.display = 'flex';
+  });
+  document.addEventListener('dragleave', e => { 
+    dragCounter--; 
+    if (dragCounter <= 0) { 
+      dragCounter = 0; 
+      overlay.style.display = 'none'; 
+    }
+  });
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => {
+    e.preventDefault(); 
+    dragCounter = 0;
+    overlay.style.display = 'none';
+    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+  });
+
+  // ── Keyboard ──────────────────────────────────────────────────────────────
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Enter' && document.getElementById('modal').style.display !== 'none') confirmRename();
+    if (e.key === 'Enter' && document.activeElement === document.getElementById('path-input')) goToPath();
+  });
+
+  document.getElementById('modal-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmRename();
+  });
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 ** 3) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    return (bytes / 1024 ** 3).toFixed(2) + ' GB';
+  }
+
+  function getIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    const icons = { js:'📄', ts:'📄', json:'📋', html:'🌐', css:'🎨', md:'📝', txt:'📝',
+      png:'🖼', jpg:'🖼', jpeg:'🖼', gif:'🖼', svg:'🖼', webp:'🖼',
+      mp4:'🎬', mkv:'🎬', avi:'🎬', mp3:'🎵', wav:'🎵',
+      pdf:'📕', zip:'📦', rar:'📦', '7z':'📦', gz:'📦',
+      exe:'⚙', bat:'⚙', sh:'⚙', py:'🐍', dll:'⚙' };
+    return icons[ext] || '📄';
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+      return c;
+    });
+  }
+
+  function escapePath(s) { 
+    return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); 
+  }
+
+  function showError(msg) {
+    document.getElementById('file-list').innerHTML = `<div class="err-msg">Ошибка: ${escapeHtml(msg)}</div>`;
+  }
+
+  function updateStatus(fileCount, totalSize) {
+    document.getElementById('status-left').textContent = `${fileCount} файлов`;
+    document.getElementById('status-right').textContent = formatSize(totalSize) + ' total';
+  }
+
+  init();
+</script>
+</body>
+</html>
